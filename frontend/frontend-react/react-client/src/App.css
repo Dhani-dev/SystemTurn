@@ -226,6 +226,8 @@
 }
 
 .hint,
+.queue-note,
+.stat-note,
 .alert {
   margin: 12px 0 0;
   color: #6d7285;
@@ -259,6 +261,132 @@
   opacity: 0.6;
 }
 
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stat,
+.queue {
+  border: 1px solid #eef0f6;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(30, 27, 75, 0.04);
+}
+
+.stat {
+  padding: 12px 10px 14px;
+}
+
+.stat-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.stat-icon.violet {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.stat-icon.green {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.stat-icon.blue {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.stat span,
+.queue-title span {
+  display: block;
+  color: #8b90a3;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stat strong {
+  display: block;
+  margin-top: 8px;
+  color: #1a1730;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.stat span {
+  margin-top: 8px;
+  line-height: 1.25;
+}
+
+.queue {
+  padding: 14px 14px 12px;
+}
+
+.queue-title {
+  margin-bottom: 10px;
+  color: #1a1730;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.queue table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.queue th {
+  padding: 8px 10px;
+  background: #f7f6fb;
+  color: #8b90a3;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.queue th:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.queue th:last-child {
+  border-radius: 0 8px 8px 0;
+  text-align: right;
+}
+
+.queue td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #f2f3f8;
+  color: #2a2740;
+  font-weight: 700;
+}
+
+.queue td:last-child {
+  text-align: right;
+}
+
+.queue td .status {
+  margin-left: 0;
+}
+
+.queue-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.empty-row td {
+  color: #8b90a3;
+  font-weight: 600;
+  text-align: left;
+}
+
 @media (max-width: 640px) {
   .page {
     padding: 0;
@@ -286,7 +414,16 @@
     font-size: 30px;
   }
 
-  .turno-copy strong {
+  .turno-copy strong,
+  .stat strong {
     font-size: 22px;
+  }
+
+  .stats {
+    gap: 8px;
+  }
+
+  .stat span {
+    font-size: 11px;
   }
 }

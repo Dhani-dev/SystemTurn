@@ -1,16 +1,27 @@
-import { useRef, useState } from 'react'
-import { consultarTurno, solicitarTurno, usandoSimulacion } from './services/turnosService.js'
-import { etiquetaEstado, formatearMinutos, formatearNumero } from './utils/turnoFormat.js'
+import { useEffect, useRef, useState } from 'react'
+import { consultarTurno, obtenerEstadisticas, solicitarTurno, usandoSimulacion } from './services/turnosService.js'
+import { etiquetaEstado, formatearCantidad, formatearMinutos, formatearNumero } from './utils/turnoFormat.js'
 import './App.css'
 
 const SIMULACION = usandoSimulacion()
 
 function App() {
   const [turno, setTurno] = useState(null)
+  const [stats, setStats] = useState(null)
   const [phase, setPhase] = useState('idle')
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
   const ocupado = useRef(false)
+
+  useEffect(() => {
+    let vigente = true
+    obtenerEstadisticas().then((data) => {
+      if (vigente) setStats(data)
+    })
+    return () => {
+      vigente = false
+    }
+  }, [turno?.numero, turno?.estado])
 
   async function ejecutar(accion, siguientePhase) {
     if (ocupado.current) return
@@ -85,6 +96,8 @@ function App() {
           </button>
           {error && <p role="alert" className="alert">{error}</p>}
           <TurnoCard turno={turno} />
+          <StatsCards stats={stats} simulacion={SIMULACION} />
+          <QueueSection turno={turno} />
           {turno && (
             <button
               type="button"
@@ -185,6 +198,88 @@ function TurnoCard({ turno }) {
   )
 }
 
+function StatsCards({ stats, simulacion }) {
+  const personas = formatearCantidad(stats?.personasEnEspera)
+  const tiempo = formatearMinutos(stats?.tiempoEsperaPromedioMinutos)
+  const atendidos = formatearCantidad(stats?.turnosAtendidosHoy)
+
+  return (
+    <section aria-label="Información de la fila">
+      <div className="stats">
+        <Stat icon="violet" label="Personas en espera" value={personas} glyph={<PeopleIcon />} />
+        <Stat icon="green" label="Tiempo de espera promedio" value={tiempo} glyph={<ClockIcon />} />
+        <Stat icon="blue" label="Turnos atendidos hoy" value={atendidos} glyph={<CheckIcon />} />
+      </div>
+      <p className="stat-note">
+        {simulacion
+          ? 'Estas cifras salen de la simulación local. El tiempo promedio no está disponible porque ningún turno ha sido atendido aquí.'
+          : stats
+            ? 'Cifras obtenidas del servicio.'
+            : 'Las estadísticas no están disponibles: el servicio no entregó estos datos.'}
+      </p>
+    </section>
+  )
+}
+
+function Stat({ icon, label, value, glyph }) {
+  return (
+    <article className="stat">
+      <div className={`stat-icon ${icon}`}>{glyph}</div>
+      <span>{label}</span>
+      <strong>{value ?? '—'}</strong>
+    </article>
+  )
+}
+
+function textoPosicion(turno) {
+  if (typeof turno.posicionEnFila === 'number') return String(turno.posicionEnFila)
+  if (turno.estado === 'PENDIENTE') return 'No disponible'
+  return '—'
+}
+
+function QueueSection({ turno }) {
+  return (
+    <section className="queue" aria-labelledby="fila-titulo">
+      <div className="queue-title" id="fila-titulo">
+        Tu turno en la fila
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Posición</th>
+            <th scope="col">Número de turno</th>
+            <th scope="col">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {turno ? (
+            <tr>
+              <td>{textoPosicion(turno)}</td>
+              <td>{formatearNumero(turno.numero)}</td>
+              <td>
+                <span className={`status status-${turno.estado.toLowerCase()}`}>
+                  {etiquetaEstado(turno.estado)}
+                </span>
+              </td>
+            </tr>
+          ) : (
+            <tr className="empty-row">
+              <td colSpan={3}>Cuando solicites un turno, verás aquí tu posición y tu estado.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {turno?.estado === 'PENDIENTE' && typeof turno.posicionEnFila !== 'number' && (
+        <p className="hint">La posición en la fila no está disponible.</p>
+      )}
+      <p className="queue-note">
+        <ClockIcon />
+        Los turnos se atienden en orden de llegada.
+      </p>
+    </section>
+  )
+}
+
 function mensajeTurno(turno) {
   if (!turno) return 'Aún no tienes un turno asignado.'
   if (turno.estado === 'PENDIENTE') return 'Consulta el estado de tu turno en esta pantalla.'
@@ -209,6 +304,35 @@ function ArrowIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PeopleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="9" cy="9" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="16" cy="10" r="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M4.8 17.5c.8-2.2 2.4-3.2 4.2-3.2 1.8 0 3.4 1 4.2 3.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M13.5 14.6c1.4.1 2.6.9 3.3 2.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ClockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 8.5V12l2.5 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8.8 12.2 11 14.4 15.4 9.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
