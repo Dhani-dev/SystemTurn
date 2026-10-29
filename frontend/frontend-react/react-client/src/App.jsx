@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { consultarTurno, obtenerEstadisticas, solicitarTurno, usandoSimulacion } from './services/turnosService.js'
-import { etiquetaEstado, formatearCantidad, formatearMinutos, formatearNumero } from './utils/turnoFormat.js'
+import {
+  cancelarTurno,
+  consultarTurno,
+  obtenerEstadisticas,
+  solicitarTurno,
+  usandoSimulacion,
+} from './services/turnosService.js'
+import {
+  etiquetaEstado,
+  formatearCantidad,
+  formatearMinutos,
+  formatearNumero,
+} from './utils/turnoFormat.js'
 import './App.css'
 
 const SIMULACION = usandoSimulacion()
@@ -11,6 +22,7 @@ function App() {
   const [phase, setPhase] = useState('idle')
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
+  const [confirmarCancelacion, setConfirmarCancelacion] = useState(false)
   const ocupado = useRef(false)
 
   useEffect(() => {
@@ -45,8 +57,17 @@ function App() {
 
   function onSolicitar() {
     if (turno?.estado === 'PENDIENTE' || phase !== 'idle') return
+    setConfirmarCancelacion(false)
     ejecutar(solicitarTurno, 'requesting').then((data) => {
       if (data) setAviso(`Turno ${formatearNumero(data.numero)} solicitado.`)
+    })
+  }
+
+  function onCancelar() {
+    if (!turno || turno.estado !== 'PENDIENTE' || phase !== 'idle') return
+    ejecutar(() => cancelarTurno(turno.numero), 'cancelling').then((data) => {
+      setConfirmarCancelacion(false)
+      if (data) setAviso(`Turno ${formatearNumero(data.numero)} cancelado.`)
     })
   }
 
@@ -59,6 +80,7 @@ function App() {
 
   const pendiente = turno?.estado === 'PENDIENTE'
   const solicitando = phase === 'requesting'
+  const cancelando = phase === 'cancelling'
   const actualizando = phase === 'refreshing'
   const puedeSolicitar = phase === 'idle' && !pendiente
 
@@ -81,7 +103,7 @@ function App() {
             type="button"
             className="primary"
             onClick={onSolicitar}
-            disabled={solicitando || pendiente || actualizando}
+            disabled={solicitando || pendiente || cancelando || actualizando}
             aria-busy={solicitando}
           >
             <TicketIcon />
@@ -95,7 +117,14 @@ function App() {
             <span className="arrow">{puedeSolicitar && <ArrowIcon />}</span>
           </button>
           {error && <p role="alert" className="alert">{error}</p>}
-          <TurnoCard turno={turno} />
+          <TurnoCard
+            turno={turno}
+            confirmar={confirmarCancelacion}
+            cancelando={cancelando}
+            onPedirConfirmacion={() => setConfirmarCancelacion(true)}
+            onConservar={() => setConfirmarCancelacion(false)}
+            onCancelar={onCancelar}
+          />
           <StatsCards stats={stats} simulacion={SIMULACION} />
           <QueueSection turno={turno} />
           {turno && (
@@ -173,9 +202,10 @@ function Illustration() {
   )
 }
 
-function TurnoCard({ turno }) {
+function TurnoCard({ turno, confirmar, cancelando, onPedirConfirmacion, onConservar, onCancelar }) {
   const estado = turno?.estado
   const claseEstado = estado ? `status-${estado.toLowerCase()}` : 'status-vacio'
+  const mensaje = mensajeTurno(turno)
   const espera = formatearMinutos(turno?.esperaEstimadaMinutos)
 
   return (
@@ -191,11 +221,37 @@ function TurnoCard({ turno }) {
         <span className={`status ${claseEstado}`}>{etiquetaEstado(estado)}</span>
       </div>
       <p className="hint">
-        {mensajeTurno(turno)}
+        {mensaje}
         {espera ? ` Espera estimada: ${espera}.` : ''}
       </p>
+      {estado === 'PENDIENTE' && !confirmar && (
+        <button type="button" className="ghost solo" onClick={onPedirConfirmacion} disabled={cancelando}>
+          Cancelar turno
+        </button>
+      )}
+      {estado === 'PENDIENTE' && confirmar && (
+        <div className="confirm">
+          <p>Si cancelas, el asesor no llamará este turno.</p>
+          <div className="confirm-actions">
+            <button type="button" className="danger" onClick={onCancelar} disabled={cancelando}>
+              {cancelando ? 'Cancelando...' : 'Sí, cancelar'}
+            </button>
+            <button type="button" className="ghost" onClick={onConservar} disabled={cancelando}>
+              Conservar
+            </button>
+          </div>
+        </div>
+      )}
     </article>
   )
+}
+
+function mensajeTurno(turno) {
+  if (!turno) return 'Aún no tienes un turno asignado.'
+  if (turno.estado === 'PENDIENTE') return 'Consulta el estado de tu turno en esta pantalla.'
+  if (turno.estado === 'CANCELADO') return 'Cancelaste este turno. El asesor no lo llamará.'
+  if (turno.estado === 'ATENDIDO') return 'Este turno ya fue atendido.'
+  return 'Revisa el estado recibido para este turno.'
 }
 
 function StatsCards({ stats, simulacion }) {
@@ -280,13 +336,6 @@ function QueueSection({ turno }) {
   )
 }
 
-function mensajeTurno(turno) {
-  if (!turno) return 'Aún no tienes un turno asignado.'
-  if (turno.estado === 'PENDIENTE') return 'Consulta el estado de tu turno en esta pantalla.'
-  if (turno.estado === 'ATENDIDO') return 'Este turno ya fue atendido.'
-  return 'Revisa el estado recibido para este turno.'
-}
-
 function TicketIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -304,6 +353,15 @@ function ArrowIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function UserIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M6 18.5c1.2-2.6 3.2-3.8 6-3.8s4.8 1.2 6 3.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
 }
@@ -333,15 +391,6 @@ function CheckIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="1.8" />
       <path d="M8.8 12.2 11 14.4 15.4 9.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function UserIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M6 18.5c1.2-2.6 3.2-3.8 6-3.8s4.8 1.2 6 3.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
 }
