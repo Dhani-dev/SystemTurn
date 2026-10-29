@@ -1,12 +1,100 @@
+import { useRef, useState } from 'react'
+import { consultarTurno, solicitarTurno, usandoSimulacion } from './services/turnosService.js'
+import { etiquetaEstado, formatearMinutos, formatearNumero } from './utils/turnoFormat.js'
 import './App.css'
 
+const SIMULACION = usandoSimulacion()
+
 function App() {
+  const [turno, setTurno] = useState(null)
+  const [phase, setPhase] = useState('idle')
+  const [error, setError] = useState('')
+  const [aviso, setAviso] = useState('')
+  const ocupado = useRef(false)
+
+  async function ejecutar(accion, siguientePhase) {
+    if (ocupado.current) return
+    ocupado.current = true
+    setError('')
+    setAviso('')
+    setPhase(siguientePhase)
+    try {
+      const data = await accion()
+      setTurno(data)
+      setPhase('idle')
+      return data
+    } catch (causa) {
+      setError(causa instanceof Error ? causa.message : 'Ocurrió un error inesperado.')
+      setPhase('idle')
+      return null
+    } finally {
+      ocupado.current = false
+    }
+  }
+
+  function onSolicitar() {
+    if (turno?.estado === 'PENDIENTE' || phase !== 'idle') return
+    ejecutar(solicitarTurno, 'requesting').then((data) => {
+      if (data) setAviso(`Turno ${formatearNumero(data.numero)} solicitado.`)
+    })
+  }
+
+  function onActualizar() {
+    if (!turno || phase !== 'idle') return
+    ejecutar(() => consultarTurno(turno.numero), 'refreshing').then((data) => {
+      if (data) setAviso('Estado actualizado.')
+    })
+  }
+
+  const pendiente = turno?.estado === 'PENDIENTE'
+  const solicitando = phase === 'requesting'
+  const actualizando = phase === 'refreshing'
+  const puedeSolicitar = phase === 'idle' && !pendiente
+
   return (
     <main className="page">
       <section className="panel" aria-label="Vista del cliente">
         <Header />
         <div className="content">
+          <p className="sr-only" aria-live="polite">
+            {aviso}
+          </p>
+          {SIMULACION && (
+            <p className="banner">
+              Modo demostración: el backend de turnos todavía no está conectado. Los turnos de esta
+              pantalla se simulan solo en tu navegador.
+            </p>
+          )}
           <Welcome />
+          <button
+            type="button"
+            className="primary"
+            onClick={onSolicitar}
+            disabled={solicitando || pendiente || actualizando}
+            aria-busy={solicitando}
+          >
+            <TicketIcon />
+            <span>
+              {solicitando
+                ? 'Solicitando turno...'
+                : pendiente
+                  ? 'Ya tienes un turno'
+                  : 'Solicitar turno'}
+            </span>
+            <span className="arrow">{puedeSolicitar && <ArrowIcon />}</span>
+          </button>
+          {error && <p role="alert" className="alert">{error}</p>}
+          <TurnoCard turno={turno} />
+          {turno && (
+            <button
+              type="button"
+              className="linkish"
+              onClick={onActualizar}
+              disabled={phase !== 'idle'}
+            >
+              {actualizando ? 'Actualizando estado...' : 'Actualizar estado'}
+            </button>
+          )}
         </div>
       </section>
     </main>
@@ -72,6 +160,38 @@ function Illustration() {
   )
 }
 
+function TurnoCard({ turno }) {
+  const estado = turno?.estado
+  const claseEstado = estado ? `status-${estado.toLowerCase()}` : 'status-vacio'
+  const espera = formatearMinutos(turno?.esperaEstimadaMinutos)
+
+  return (
+    <article className="card" aria-labelledby="tu-turno">
+      <div className="turno-row">
+        <div className="ticket-badge">
+          <TicketIcon />
+        </div>
+        <div className="turno-copy">
+          <span id="tu-turno">Tu turno</span>
+          <strong className={turno ? undefined : 'muted'}>{formatearNumero(turno?.numero)}</strong>
+        </div>
+        <span className={`status ${claseEstado}`}>{etiquetaEstado(estado)}</span>
+      </div>
+      <p className="hint">
+        {mensajeTurno(turno)}
+        {espera ? ` Espera estimada: ${espera}.` : ''}
+      </p>
+    </article>
+  )
+}
+
+function mensajeTurno(turno) {
+  if (!turno) return 'Aún no tienes un turno asignado.'
+  if (turno.estado === 'PENDIENTE') return 'Consulta el estado de tu turno en esta pantalla.'
+  if (turno.estado === 'ATENDIDO') return 'Este turno ya fue atendido.'
+  return 'Revisa el estado recibido para este turno.'
+}
+
 function TicketIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -81,6 +201,14 @@ function TicketIcon() {
         strokeWidth="1.8"
       />
       <path d="M9 9.5v5M12 9.5v5M15 9.5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ArrowIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
