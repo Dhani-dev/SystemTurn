@@ -95,3 +95,10 @@ npm run build
 ```
 
 Estos comandos validan el código y comprueban que la aplicación pueda compilarse correctamente.
+
+
+<img width="1536" height="1024" alt="imagen" src="https://github.com/user-attachments/assets/ceab91b4-187f-4e29-a54a-0593e1299aa2" />
+
+
+
+<img width="1337" height="852" alt="imagen" src="https://github.com/user-attachments/assets/f5d759e3-9746-480a-9523-f1c1d1c686c6" />
